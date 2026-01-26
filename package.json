@@ -31,7 +31,8 @@
     "zod": "^3.24.0"
   },
   "bin": {
-    "tuivision": "./dist/index.js"
+    "tuivision": "./dist/index.js",
+    "tuivision-cli": "./dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
