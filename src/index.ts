@@ -14,6 +14,10 @@ import {
   getScreen,
   getScreenshotSchema,
   getScreenshot,
+  waitForTextSchema,
+  waitForText,
+  waitForScreenChangeSchema,
+  waitForScreenChange,
   closeSessionSchema,
   closeSession,
   listSessionsSchema,
@@ -42,6 +46,11 @@ server.registerTool(
       rows: z.number().optional().describe("Terminal height in rows (default: 24)"),
       env: z.record(z.string()).optional().describe("Additional environment variables"),
       cwd: z.string().optional().describe("Working directory for the command"),
+      use_script: z.boolean().optional().describe("Wrap in script for better TTY compat"),
+      answer_queries: z
+        .boolean()
+        .optional()
+        .describe("Auto-respond to ANSI terminal queries (enabled by default)"),
     },
   },
   async (input) => {
@@ -52,6 +61,8 @@ server.registerTool(
         rows: (input.rows as number) ?? 24,
         env: input.env as Record<string, string> | undefined,
         cwd: input.cwd as string | undefined,
+        use_script: (input.use_script as boolean) ?? false,
+        answer_queries: (input.answer_queries as boolean) ?? true,
       });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -187,6 +198,73 @@ server.registerTool(
       // SVG as text
       return {
         content: [{ type: "text", text: result.data }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Register wait_for_text tool
+server.registerTool(
+  "wait_for_text",
+  {
+    title: "Wait For Text",
+    description: "Wait until a regex pattern matches the current screen text.",
+    inputSchema: {
+      session_id: z.string().describe("Session ID from spawn_tui"),
+      pattern: z.string().describe("Regex pattern to match against full screen text"),
+      flags: z.string().optional().describe("Optional regex flags (e.g. 'i', 'm')"),
+      timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 10000)"),
+    },
+  },
+  async (input) => {
+    try {
+      const result = await waitForText(sessionManager, {
+        session_id: input.session_id as string,
+        pattern: input.pattern as string,
+        flags: input.flags as string | undefined,
+        timeout_ms: input.timeout_ms as number | undefined,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Register wait_for_screen_change tool
+server.registerTool(
+  "wait_for_screen_change",
+  {
+    title: "Wait For Screen Change",
+    description: "Wait until the screen stops changing (debounced).",
+    inputSchema: {
+      session_id: z.string().describe("Session ID from spawn_tui"),
+      timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 5000)"),
+      stable_ms: z
+        .number()
+        .optional()
+        .describe("Debounce duration with no visible text changes (default: 300)"),
+    },
+  },
+  async (input) => {
+    try {
+      const result = await waitForScreenChange(sessionManager, {
+        session_id: input.session_id as string,
+        timeout_ms: input.timeout_ms as number | undefined,
+        stable_ms: input.stable_ms as number | undefined,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     } catch (err) {
       return {

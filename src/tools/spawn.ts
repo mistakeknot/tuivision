@@ -7,6 +7,8 @@ export const spawnTuiSchema = z.object({
   rows: z.number().optional().default(24).describe("Terminal height in rows"),
   env: z.record(z.string()).optional().describe("Additional environment variables"),
   cwd: z.string().optional().describe("Working directory for the command"),
+  use_script: z.boolean().optional().default(false).describe("Wrap in script for better TTY compat"),
+  answer_queries: z.boolean().optional().default(true).describe("Auto-respond to ANSI terminal queries (enabled by default)"),
 });
 
 export type SpawnTuiInput = z.infer<typeof spawnTuiSchema>;
@@ -18,6 +20,8 @@ export function spawnTui(sessionManager: SessionManager, input: SpawnTuiInput) {
     rows: input.rows,
     env: input.env,
     cwd: input.cwd,
+    useScript: input.use_script,
+    answerQueries: input.answer_queries,
   });
 
   return {

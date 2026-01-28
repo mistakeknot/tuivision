@@ -1,6 +1,10 @@
 import * as pty from "node-pty";
 import { v4 as uuidv4 } from "uuid";
+import { EventEmitter } from "events";
+import type TypedEmitter from "typed-emitter";
+import type { EventMap } from "typed-emitter";
 import { TerminalRenderer } from "./terminal-renderer.js";
+import { QueryResponder } from "./query-responder.js";
 
 export interface SessionOptions {
   command: string;
@@ -9,6 +13,8 @@ export interface SessionOptions {
   rows?: number;
   env?: Record<string, string>;
   cwd?: string;
+  useScript?: boolean;  // Wrap in script command for better TTY compatibility
+  answerQueries?: boolean;  // Auto-respond to ANSI terminal queries (default: true)
 }
 
 export interface Session {
@@ -17,7 +23,17 @@ export interface Session {
   renderer: TerminalRenderer;
   pid: number;
   createdAt: Date;
+  emitter: SessionEmitter;
+  exited: boolean;
+  exitCode: number | null;
 }
+
+interface SessionEvents extends EventMap {
+  data: (data: string) => void;
+  exit: (exitCode: number | null, signal: number | undefined) => void;
+}
+
+type SessionEmitter = TypedEmitter<SessionEvents> & EventEmitter;
 
 export class SessionManager {
   private sessions: Map<string, Session> = new Map();
@@ -51,14 +67,26 @@ export class SessionManager {
     const cols = options.cols ?? 80;
     const rows = options.rows ?? 24;
 
-    // Parse command - if it contains spaces, split it
-    let command = options.command;
-    let args = options.args ?? [];
+    let command: string;
+    let args: string[];
 
-    if (args.length === 0 && command.includes(" ")) {
-      const parts = command.split(/\s+/);
-      command = parts[0];
-      args = parts.slice(1);
+    if (options.useScript) {
+      // Wrap in script for better TTY compatibility (helps Bubble Tea, etc.)
+      // -q: quiet (no "Script started" message)
+      // -c: command to run
+      // /dev/null: discard the typescript file
+      command = "script";
+      args = ["-q", "-c", options.command, "/dev/null"];
+    } else {
+      // Parse command - if it contains spaces, split it
+      command = options.command;
+      args = options.args ?? [];
+
+      if (args.length === 0 && command.includes(" ")) {
+        const parts = command.split(/\s+/);
+        command = parts[0];
+        args = parts.slice(1);
+      }
     }
 
     // Merge environment
@@ -81,10 +109,9 @@ export class SessionManager {
     // Create terminal renderer
     const renderer = new TerminalRenderer(cols, rows);
 
-    // Connect PTY output to renderer
-    ptyProcess.onData((data: string) => {
-      renderer.write(data);
-    });
+    const emitter = new EventEmitter() as SessionEmitter;
+
+    const queryResponder = new QueryResponder(() => renderer.getScreenState().cursor);
 
     const session: Session = {
       id,
@@ -92,7 +119,33 @@ export class SessionManager {
       renderer,
       pid: ptyProcess.pid,
       createdAt: new Date(),
+      emitter,
+      exited: false,
+      exitCode: null,
     };
+
+    // Connect PTY output to renderer, optionally answering ANSI queries
+    ptyProcess.onData((data: string) => {
+      renderer.write(data);
+      emitter.emit("data", data);
+
+      if (options.answerQueries !== false) {
+        const responses = queryResponder.scan(data);
+        for (const response of responses) {
+          ptyProcess.write(response);
+        }
+      }
+    });
+
+    ptyProcess.onExit(({ exitCode, signal }) => {
+      if (!session.exited) {
+        session.exited = true;
+        session.exitCode = exitCode;
+        emitter.emit("exit", exitCode, signal);
+      } else if (session.exitCode === null) {
+        session.exitCode = exitCode;
+      }
+    });
 
     this.sessions.set(id, session);
     return session;
@@ -125,14 +178,23 @@ export class SessionManager {
       return false;
     }
 
+    if (!session.exited) {
+      session.exited = true;
+      session.exitCode = null;
+      session.emitter.emit("exit", null, undefined);
+    }
+
     try {
       session.pty.kill();
     } catch {
       // Process may already be dead
     }
 
-    session.renderer.dispose();
-    this.sessions.delete(id);
+    queueMicrotask(() => {
+      session.emitter.removeAllListeners();
+      session.renderer.dispose();
+      this.sessions.delete(id);
+    });
     return true;
   }
 

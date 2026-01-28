@@ -57,11 +57,30 @@ Start a TUI application in a virtual terminal.
   "cols": 80,
   "rows": 24,
   "env": { "TERM": "xterm-256color" },
-  "cwd": "/home/user"
+  "cwd": "/home/user",
+  "use_script": false,
+  "answer_queries": true
 }
 ```
 
 Returns `session_id` for subsequent operations.
+
+#### TTY Compatibility Options
+
+Some TUI frameworks (like Bubble Tea/Go, Charm) require additional TTY features:
+
+- **`use_script`**: Wraps command in `script -q -c "..." /dev/null` for `/dev/tty` access
+- **`answer_queries`**: Auto-responds to ANSI terminal queries (enabled by default, set `false` to disable)
+
+For Bubble Tea apps, use both:
+
+```json
+{
+  "command": "./my-bubbletea-app",
+  "use_script": true,
+  "answer_queries": true
+}
+```
 
 ### send_input
 
@@ -193,6 +212,24 @@ brew install pkg-config cairo pango libpng jpeg giflib librsvg
 - **Session timeout**: Sessions auto-close after 30 minutes of inactivity
 - **Single user**: Not designed for concurrent access to same session
 - **No scrollback**: Only the visible screen is captured
+
+## CLI Usage
+
+Tuivision also includes a CLI for bash-friendly automation:
+
+```bash
+# Single-shot mode (spawn, interact, capture in one command)
+tuivision run htop --cols 120 --rows 40 --wait 2000 --screenshot /tmp/htop.png
+
+# For Bubble Tea apps, use --script and --answer-queries
+tuivision run "./my-app tui" --script --answer-queries --screenshot /tmp/app.png
+
+# Daemon mode for persistent sessions
+tuivision daemon start
+tuivision spawn "./my-app" --script --answer-queries
+tuivision screen <session-id>
+tuivision close <session-id>
+```
 
 ## License
 
