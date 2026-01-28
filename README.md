@@ -14,8 +14,8 @@ Lets Claude Code spawn, interact with, and visually inspect terminal user interf
 ## Installation
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 ## Usage with Claude Code
@@ -54,6 +54,7 @@ Start a TUI application in a virtual terminal.
 ```json
 {
   "command": "htop",
+  "args": ["--sort-key", "PERCENT_CPU"],
   "cols": 80,
   "rows": 24,
   "env": { "TERM": "xterm-256color" },
@@ -64,6 +65,8 @@ Start a TUI application in a virtual terminal.
 ```
 
 Returns `session_id` for subsequent operations.
+
+**Tip:** Use `args` for quoted values or paths with spaces to avoid naive splitting.
 
 #### TTY Compatibility Options
 

@@ -19,6 +19,7 @@ export interface Session {
     renderer: TerminalRenderer;
     pid: number;
     createdAt: Date;
+    lastActivityAt: Date;
     emitter: SessionEmitter;
     exited: boolean;
     exitCode: number | null;

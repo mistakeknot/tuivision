@@ -35,6 +35,12 @@ export async function waitForText(sessionManager, input) {
     catch (err) {
         throw new Error(`Invalid regex: ${err.message}`);
     }
+    const matches = (text) => {
+        if (regex.global || regex.sticky) {
+            regex.lastIndex = 0;
+        }
+        return regex.test(text);
+    };
     const timeoutMs = input.timeout_ms ?? 10000;
     const start = Date.now();
     let lastText = safeScreenText(session);
@@ -67,7 +73,7 @@ export async function waitForText(sessionManager, input) {
         };
         const onData = () => {
             lastText = safeScreenText(session);
-            if (regex.test(lastText)) {
+            if (matches(lastText)) {
                 finish({ found: true });
             }
         };
@@ -82,7 +88,7 @@ export async function waitForText(sessionManager, input) {
         session.emitter.on("data", onData);
         session.emitter.on("exit", onExit);
         lastText = safeScreenText(session);
-        if (regex.test(lastText)) {
+        if (matches(lastText)) {
             finish({ found: true });
             return;
         }

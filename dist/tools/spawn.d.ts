@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SessionManager } from "../session-manager.js";
 export declare const spawnTuiSchema: z.ZodObject<{
     command: z.ZodString;
+    args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     cols: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     rows: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     env: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
@@ -15,12 +16,14 @@ export declare const spawnTuiSchema: z.ZodObject<{
     use_script: boolean;
     answer_queries: boolean;
     cwd?: string | undefined;
+    args?: string[] | undefined;
     env?: Record<string, string> | undefined;
 }, {
     command: string;
     cols?: number | undefined;
     rows?: number | undefined;
     cwd?: string | undefined;
+    args?: string[] | undefined;
     env?: Record<string, string> | undefined;
     use_script?: boolean | undefined;
     answer_queries?: boolean | undefined;

@@ -187,7 +187,7 @@ Register both tools following existing pattern. Add `export * from "./wait.js"` 
 ## Verification
 
 ```bash
-npm run build
+pnpm build
 
 # Via MCP (primary interface):
 # 1. spawn_tui command="htop" use_script=true

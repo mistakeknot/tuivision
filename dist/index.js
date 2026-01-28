@@ -15,6 +15,7 @@ server.registerTool("spawn_tui", {
     description: "Start a TUI application in a virtual terminal. Returns a session_id for subsequent operations.",
     inputSchema: {
         command: z.string().describe("Command to run (e.g., 'htop', 'python my_app.py')"),
+        args: z.array(z.string()).optional().describe("Command arguments (recommended for spaces/quotes)"),
         cols: z.number().optional().describe("Terminal width in columns (default: 80)"),
         rows: z.number().optional().describe("Terminal height in rows (default: 24)"),
         env: z.record(z.string()).optional().describe("Additional environment variables"),
@@ -29,6 +30,7 @@ server.registerTool("spawn_tui", {
     try {
         const result = spawnTui(sessionManager, {
             command: input.command,
+            args: input.args,
             cols: input.cols ?? 80,
             rows: input.rows ?? 24,
             env: input.env,

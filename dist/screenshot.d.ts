@@ -6,6 +6,8 @@ export interface ScreenshotOptions {
     cursorColor?: string;
     showCursor?: boolean;
 }
+export declare const DEFAULT_FONT_FAMILY: string;
+export declare function resolveFontFamily(options: ScreenshotOptions): string;
 /**
  * Render a terminal screen state to a PNG image buffer
  */

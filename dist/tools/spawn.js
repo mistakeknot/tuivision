@@ -1,6 +1,7 @@
 import { z } from "zod";
 export const spawnTuiSchema = z.object({
     command: z.string().describe("Command to run (e.g., 'htop', 'python my_app.py')"),
+    args: z.array(z.string()).optional().describe("Command arguments (recommended for spaces/quotes)"),
     cols: z.number().optional().default(80).describe("Terminal width in columns"),
     rows: z.number().optional().default(24).describe("Terminal height in rows"),
     env: z.record(z.string()).optional().describe("Additional environment variables"),
@@ -11,6 +12,7 @@ export const spawnTuiSchema = z.object({
 export function spawnTui(sessionManager, input) {
     const session = sessionManager.spawn({
         command: input.command,
+        args: input.args,
         cols: input.cols,
         rows: input.rows,
         env: input.env,

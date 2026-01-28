@@ -33,13 +33,16 @@ function tryRegisterFont() {
     return "monospace";
 }
 // Try to register font once at module load
-const FONT_FAMILY = tryRegisterFont();
+export const DEFAULT_FONT_FAMILY = tryRegisterFont();
+export function resolveFontFamily(options) {
+    return options.fontFamily ?? DEFAULT_FONT_FAMILY;
+}
 /**
  * Render a terminal screen state to a PNG image buffer
  */
 export function renderToPng(state, options = {}) {
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    opts.fontFamily = FONT_FAMILY;
+    opts.fontFamily = resolveFontFamily(options);
     // Calculate character dimensions
     // Using a test canvas to measure character width
     const testCanvas = createCanvas(100, 100);

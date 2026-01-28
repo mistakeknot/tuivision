@@ -47,7 +47,11 @@ function tryRegisterFont(): string {
 }
 
 // Try to register font once at module load
-const FONT_FAMILY = tryRegisterFont();
+export const DEFAULT_FONT_FAMILY = tryRegisterFont();
+
+export function resolveFontFamily(options: ScreenshotOptions): string {
+  return options.fontFamily ?? DEFAULT_FONT_FAMILY;
+}
 
 /**
  * Render a terminal screen state to a PNG image buffer
@@ -57,7 +61,7 @@ export function renderToPng(
   options: ScreenshotOptions = {}
 ): Buffer {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  opts.fontFamily = FONT_FAMILY;
+  opts.fontFamily = resolveFontFamily(options);
 
   // Calculate character dimensions
   // Using a test canvas to measure character width

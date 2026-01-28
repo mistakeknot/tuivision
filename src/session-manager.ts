@@ -23,6 +23,7 @@ export interface Session {
   renderer: TerminalRenderer;
   pid: number;
   createdAt: Date;
+  lastActivityAt: Date;
   emitter: SessionEmitter;
   exited: boolean;
   exitCode: number | null;
@@ -56,7 +57,8 @@ export class SessionManager {
   private cleanupStaleSessions(): void {
     const now = Date.now();
     for (const [id, session] of this.sessions) {
-      if (now - session.createdAt.getTime() > this.sessionTimeoutMs) {
+      const lastActivity = session.lastActivityAt ?? session.createdAt;
+      if (now - lastActivity.getTime() > this.sessionTimeoutMs) {
         this.closeSession(id);
       }
     }
@@ -119,6 +121,7 @@ export class SessionManager {
       renderer,
       pid: ptyProcess.pid,
       createdAt: new Date(),
+      lastActivityAt: new Date(),
       emitter,
       exited: false,
       exitCode: null,
@@ -126,6 +129,7 @@ export class SessionManager {
 
     // Connect PTY output to renderer, optionally answering ANSI queries
     ptyProcess.onData((data: string) => {
+      session.lastActivityAt = new Date();
       renderer.write(data);
       emitter.emit("data", data);
 
@@ -160,6 +164,7 @@ export class SessionManager {
     if (!session) {
       throw new Error(`Session not found: ${id}`);
     }
+    session.lastActivityAt = new Date();
     session.pty.write(input);
   }
 
