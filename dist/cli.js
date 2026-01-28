@@ -98,14 +98,16 @@ async function run(args) {
     const { positional, flags } = parseArgs(args);
     const command = positional[0];
     if (!command) {
-        error("Usage: tuivision run <command> [--cols N] [--rows N] [--wait MS] [--keys KEYS] [--screenshot PATH] [--screen]");
+        error("Usage: tuivision run <command> [--cols N] [--rows N] [--wait MS] [--keys KEYS] [--screenshot PATH] [--screen] [--script] [--answer-queries]");
     }
     const cols = flags.cols ? parseInt(flags.cols, 10) : 80;
     const rows = flags.rows ? parseInt(flags.rows, 10) : 24;
     const wait = flags.wait ? parseInt(flags.wait, 10) : 500;
     const cwd = flags.cwd;
+    const useScript = flags.script === true;
+    const answerQueries = flags["answer-queries"] === true;
     const sm = new SessionManager();
-    const session = sm.spawn({ command, cols, rows, cwd });
+    const session = sm.spawn({ command, cols, rows, cwd, useScript, answerQueries });
     // Wait for app to render
     await new Promise(resolve => setTimeout(resolve, wait));
     // Send keys if specified
@@ -143,7 +145,7 @@ async function run(args) {
     }
     // Screen text if requested
     if (flags.screen) {
-        result.screen = state.lines.map(l => l.text).join("\n");
+        result.screen = session.renderer.getScreenText();
     }
     // Clean up
     sm.dispose();
@@ -157,8 +159,8 @@ function handleDaemonCommand(cmd) {
     }
     switch (cmd.action) {
         case "spawn": {
-            const { command, cols = 80, rows = 24, cwd } = cmd.args;
-            const session = daemonSessionManager.spawn({ command, cols, rows, cwd });
+            const { command, cols = 80, rows = 24, cwd, useScript = false, answerQueries = false } = cmd.args;
+            const session = daemonSessionManager.spawn({ command, cols, rows, cwd, useScript, answerQueries });
             return {
                 session_id: session.id,
                 pid: session.pty.pid,
@@ -196,19 +198,19 @@ function handleDaemonCommand(cmd) {
             if (!session) {
                 throw new Error(`Session not found: ${session_id}`);
             }
-            const state = session.renderer.getScreenState();
             if (format === "text") {
-                return state.lines.map(l => l.text).join("\n");
+                return session.renderer.getScreenText();
             }
             else if (format === "compact") {
+                const state = session.renderer.getScreenState();
                 return {
                     cols: state.width,
                     rows: state.height,
                     cursor: state.cursor,
-                    text: state.lines.map(l => l.text).join("\n"),
+                    text: session.renderer.getScreenText(),
                 };
             }
-            return state;
+            return session.renderer.getScreenState();
         }
         case "screenshot": {
             const { session_id, output: outputPath, format = "png" } = cmd.args;
@@ -349,7 +351,7 @@ async function spawn(args) {
     const { positional, flags } = parseArgs(args);
     const command = positional[0];
     if (!command) {
-        error("Usage: tuivision spawn <command> [--cols N] [--rows N] [--cwd PATH]");
+        error("Usage: tuivision spawn <command> [--cols N] [--rows N] [--cwd PATH] [--script] [--answer-queries]");
     }
     const result = await sendToDaemon({
         action: "spawn",
@@ -358,6 +360,8 @@ async function spawn(args) {
             cols: flags.cols ? parseInt(flags.cols, 10) : 80,
             rows: flags.rows ? parseInt(flags.rows, 10) : 24,
             cwd: flags.cwd,
+            useScript: flags.script === true,
+            answerQueries: flags["answer-queries"] === true,
         },
     });
     output(result);
@@ -457,16 +461,19 @@ SINGLE-SHOT MODE (all-in-one, no daemon needed):
     --screenshot PATH   Save screenshot to file
     --screen            Include screen text in output
     --cwd PATH          Working directory
+    --script            Wrap in script for better TTY compat
+    --answer-queries    Auto-respond to ANSI terminal queries (Bubble Tea, etc.)
 
   Example:
     tuivision run htop --cols 120 --rows 40 --wait 2000 --screenshot /tmp/htop.png
     tuivision run vim --keys i,h,e,l,l,o,escape,:,q,!,enter --screen
+    tuivision run "./myapp tui" --script --answer-queries --screenshot /tmp/app.png
 
 DAEMON MODE (persistent sessions):
   tuivision daemon start       Start the daemon (run in background)
   tuivision daemon stop        Stop the daemon
 
-  tuivision spawn <command>    Start a TUI application
+  tuivision spawn <command> [--script] [--answer-queries]  Start a TUI application
   tuivision input <id> ...     Send input to a session
   tuivision screen <id>        Get terminal content
   tuivision screenshot <id>    Capture terminal as image

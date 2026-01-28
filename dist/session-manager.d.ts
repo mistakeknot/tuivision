@@ -1,4 +1,7 @@
 import * as pty from "node-pty";
+import { EventEmitter } from "events";
+import type TypedEmitter from "typed-emitter";
+import type { EventMap } from "typed-emitter";
 import { TerminalRenderer } from "./terminal-renderer.js";
 export interface SessionOptions {
     command: string;
@@ -7,6 +10,8 @@ export interface SessionOptions {
     rows?: number;
     env?: Record<string, string>;
     cwd?: string;
+    useScript?: boolean;
+    answerQueries?: boolean;
 }
 export interface Session {
     id: string;
@@ -14,7 +19,15 @@ export interface Session {
     renderer: TerminalRenderer;
     pid: number;
     createdAt: Date;
+    emitter: SessionEmitter;
+    exited: boolean;
+    exitCode: number | null;
 }
+interface SessionEvents extends EventMap {
+    data: (data: string) => void;
+    exit: (exitCode: number | null, signal: number | undefined) => void;
+}
+type SessionEmitter = TypedEmitter<SessionEvents> & EventEmitter;
 export declare class SessionManager {
     private sessions;
     private cleanupInterval;
@@ -34,4 +47,5 @@ export declare class SessionManager {
     }>;
     dispose(): void;
 }
+export {};
 //# sourceMappingURL=session-manager.d.ts.map

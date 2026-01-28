@@ -6,18 +6,24 @@ export declare const spawnTuiSchema: z.ZodObject<{
     rows: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     env: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     cwd: z.ZodOptional<z.ZodString>;
+    use_script: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    answer_queries: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, "strip", z.ZodTypeAny, {
     cols: number;
     rows: number;
     command: string;
-    env?: Record<string, string> | undefined;
+    use_script: boolean;
+    answer_queries: boolean;
     cwd?: string | undefined;
+    env?: Record<string, string> | undefined;
 }, {
     command: string;
     cols?: number | undefined;
     rows?: number | undefined;
-    env?: Record<string, string> | undefined;
     cwd?: string | undefined;
+    env?: Record<string, string> | undefined;
+    use_script?: boolean | undefined;
+    answer_queries?: boolean | undefined;
 }>;
 export type SpawnTuiInput = z.infer<typeof spawnTuiSchema>;
 export declare function spawnTui(sessionManager: SessionManager, input: SpawnTuiInput): {

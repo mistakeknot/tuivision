@@ -47,7 +47,49 @@ export class TerminalRenderer {
         this.terminal.resize(cols, rows);
     }
     /**
-     * Convert a color number to hex string
+     * Extract color from xterm.js cell raw fg/bg value
+     * Format is MMRRGGBB where:
+     * - MM (top byte) contains color mode in bits 0-1 and attribute flags in higher bits
+     * - Color modes: 0=default, 1=16-color, 2=256-color, 3=RGB
+     */
+    extractColor(rawValue, defaultColor) {
+        // Extract mode byte and get color mode from bits 0-1
+        const modeByte = (rawValue >> 24) & 0xff;
+        const colorMode = modeByte & 0x03;
+        // Mode 0: default color
+        if (colorMode === 0) {
+            return defaultColor;
+        }
+        // Mode 3: RGB true color (24-bit)
+        if (colorMode === 3) {
+            const r = (rawValue >> 16) & 0xff;
+            const g = (rawValue >> 8) & 0xff;
+            const b = rawValue & 0xff;
+            return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+        }
+        // Mode 1: 16-color palette, Mode 2: 256-color palette
+        // The color index is in the lower byte(s)
+        const colorIndex = rawValue & 0xff;
+        // Handle 16-color palette (0-15)
+        if (colorIndex < 16) {
+            return DEFAULT_COLORS[colorIndex];
+        }
+        // Handle 256-color palette (16-231: 6x6x6 cube, 232-255: grayscale)
+        if (colorIndex < 232) {
+            // 6x6x6 color cube
+            const idx = colorIndex - 16;
+            const r = Math.floor(idx / 36);
+            const g = Math.floor((idx % 36) / 6);
+            const b = idx % 6;
+            const toHex = (v) => (v === 0 ? 0 : 55 + v * 40);
+            return `#${toHex(r).toString(16).padStart(2, "0")}${toHex(g).toString(16).padStart(2, "0")}${toHex(b).toString(16).padStart(2, "0")}`;
+        }
+        // Grayscale (232-255)
+        const gray = (colorIndex - 232) * 10 + 8;
+        return `#${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}`;
+    }
+    /**
+     * Convert a color number to hex string (legacy method for compatibility)
      */
     colorToHex(color, isDefault, defaultColor) {
         if (isDefault) {
@@ -107,20 +149,17 @@ export class TerminalRenderer {
                 }
                 const char = cell.getChars() || " ";
                 text += char;
-                // Get foreground color
-                const fgColor = cell.getFgColor();
-                const isFgDefault = cell.isFgDefault();
-                const fg = this.colorToHex(fgColor, isFgDefault, "#ffffff");
-                // Get background color
-                const bgColor = cell.getBgColor();
-                const isBgDefault = cell.isBgDefault();
-                const bg = this.colorToHex(bgColor, isBgDefault, "#000000");
-                // Get attributes using xterm.js API (methods return 0 or 1)
-                const bold = cell.isBold() === 1;
-                const italic = cell.isItalic() === 1;
-                const underline = cell.isUnderline() === 1;
-                const dim = cell.isDim() === 1;
-                const inverse = cell.isInverse() === 1;
+                // Get colors from raw fg/bg values (handles RGB true color)
+                // The cell object has fg and bg as direct properties containing encoded color values
+                const cellAny = cell;
+                const fg = this.extractColor(cellAny.fg, "#ffffff");
+                const bg = this.extractColor(cellAny.bg, "#000000");
+                // Get attributes using xterm.js API (methods return non-zero for truthy)
+                const bold = !!cell.isBold();
+                const italic = !!cell.isItalic();
+                const underline = !!cell.isUnderline();
+                const dim = !!cell.isDim();
+                const inverse = !!cell.isInverse();
                 cells.push({
                     char,
                     fg: inverse ? bg : fg,

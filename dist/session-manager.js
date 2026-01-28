@@ -1,6 +1,8 @@
 import * as pty from "node-pty";
 import { v4 as uuidv4 } from "uuid";
+import { EventEmitter } from "events";
 import { TerminalRenderer } from "./terminal-renderer.js";
+import { QueryResponder } from "./query-responder.js";
 export class SessionManager {
     sessions = new Map();
     cleanupInterval = null;
@@ -28,13 +30,25 @@ export class SessionManager {
         const id = uuidv4();
         const cols = options.cols ?? 80;
         const rows = options.rows ?? 24;
-        // Parse command - if it contains spaces, split it
-        let command = options.command;
-        let args = options.args ?? [];
-        if (args.length === 0 && command.includes(" ")) {
-            const parts = command.split(/\s+/);
-            command = parts[0];
-            args = parts.slice(1);
+        let command;
+        let args;
+        if (options.useScript) {
+            // Wrap in script for better TTY compatibility (helps Bubble Tea, etc.)
+            // -q: quiet (no "Script started" message)
+            // -c: command to run
+            // /dev/null: discard the typescript file
+            command = "script";
+            args = ["-q", "-c", options.command, "/dev/null"];
+        }
+        else {
+            // Parse command - if it contains spaces, split it
+            command = options.command;
+            args = options.args ?? [];
+            if (args.length === 0 && command.includes(" ")) {
+                const parts = command.split(/\s+/);
+                command = parts[0];
+                args = parts.slice(1);
+            }
         }
         // Merge environment
         const env = {
@@ -53,17 +67,39 @@ export class SessionManager {
         });
         // Create terminal renderer
         const renderer = new TerminalRenderer(cols, rows);
-        // Connect PTY output to renderer
-        ptyProcess.onData((data) => {
-            renderer.write(data);
-        });
+        const emitter = new EventEmitter();
+        const queryResponder = new QueryResponder(() => renderer.getScreenState().cursor);
         const session = {
             id,
             pty: ptyProcess,
             renderer,
             pid: ptyProcess.pid,
             createdAt: new Date(),
+            emitter,
+            exited: false,
+            exitCode: null,
         };
+        // Connect PTY output to renderer, optionally answering ANSI queries
+        ptyProcess.onData((data) => {
+            renderer.write(data);
+            emitter.emit("data", data);
+            if (options.answerQueries !== false) {
+                const responses = queryResponder.scan(data);
+                for (const response of responses) {
+                    ptyProcess.write(response);
+                }
+            }
+        });
+        ptyProcess.onExit(({ exitCode, signal }) => {
+            if (!session.exited) {
+                session.exited = true;
+                session.exitCode = exitCode;
+                emitter.emit("exit", exitCode, signal);
+            }
+            else if (session.exitCode === null) {
+                session.exitCode = exitCode;
+            }
+        });
         this.sessions.set(id, session);
         return session;
     }
@@ -90,14 +126,22 @@ export class SessionManager {
         if (!session) {
             return false;
         }
+        if (!session.exited) {
+            session.exited = true;
+            session.exitCode = null;
+            session.emitter.emit("exit", null, undefined);
+        }
         try {
             session.pty.kill();
         }
         catch {
             // Process may already be dead
         }
-        session.renderer.dispose();
-        this.sessions.delete(id);
+        queueMicrotask(() => {
+            session.emitter.removeAllListeners();
+            session.renderer.dispose();
+            this.sessions.delete(id);
+        });
         return true;
     }
     listSessions() {

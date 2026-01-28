@@ -7,12 +7,12 @@ export declare const getScreenshotSchema: z.ZodObject<{
     show_cursor: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, "strip", z.ZodTypeAny, {
     session_id: string;
-    format: "png" | "svg";
+    format: "svg" | "png";
     font_size: number;
     show_cursor: boolean;
 }, {
     session_id: string;
-    format?: "png" | "svg" | undefined;
+    format?: "svg" | "png" | undefined;
     font_size?: number | undefined;
     show_cursor?: boolean | undefined;
 }>;

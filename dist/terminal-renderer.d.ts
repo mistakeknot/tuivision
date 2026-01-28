@@ -32,7 +32,14 @@ export declare class TerminalRenderer {
     write(data: string): void;
     resize(cols: number, rows: number): void;
     /**
-     * Convert a color number to hex string
+     * Extract color from xterm.js cell raw fg/bg value
+     * Format is MMRRGGBB where:
+     * - MM (top byte) contains color mode in bits 0-1 and attribute flags in higher bits
+     * - Color modes: 0=default, 1=16-color, 2=256-color, 3=RGB
+     */
+    private extractColor;
+    /**
+     * Convert a color number to hex string (legacy method for compatibility)
      */
     private colorToHex;
     /**

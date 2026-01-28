@@ -6,10 +6,10 @@ export declare const getScreenSchema: z.ZodObject<{
     format: z.ZodDefault<z.ZodOptional<z.ZodEnum<["full", "text", "compact"]>>>;
 }, "strip", z.ZodTypeAny, {
     session_id: string;
-    format: "full" | "text" | "compact";
+    format: "text" | "compact" | "full";
 }, {
     session_id: string;
-    format?: "full" | "text" | "compact" | undefined;
+    format?: "text" | "compact" | "full" | undefined;
 }>;
 export type GetScreenInput = z.infer<typeof getScreenSchema>;
 export interface CompactScreenState {
