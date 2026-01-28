@@ -40,6 +40,15 @@ spawn_tui command="htop" cols=120 rows=40
 
 Returns a `session_id` for subsequent operations.
 
+**For Bubble Tea / Charm apps** (Go TUI frameworks), add TTY compatibility flags:
+
+```
+spawn_tui command="./my-bubbletea-app" cols=120 rows=40 use_script=true answer_queries=true
+```
+
+- `use_script`: Wraps in `script` command for `/dev/tty` access
+- `answer_queries`: Auto-responds to ANSI terminal queries
+
 ### 2. Wait for Startup
 
 After spawning, give the app time to initialize:
@@ -137,6 +146,8 @@ close_session session_id="..."
 - **Terminal size**: Match real-world dimensions (80x24 is standard, 120x40 for wider apps).
 - **Colors**: Use `get_screen format="full"` to verify color/attribute rendering.
 - **Exit cleanly**: Send `ctrl+c` or `q` before `close_session` for graceful app shutdown.
+- **Bubble Tea / Charm**: Always use `use_script=true` and `answer_queries=true` for Go TUI apps.
+- **Blank screen?** If app shows blank, it likely needs the TTY flags above.
 
 ## Example: Test htop
 
@@ -159,3 +170,19 @@ close_session session_id="..."
 6. send_input session_id="..." keys=[":","q","!","enter"]
 7. close_session session_id="..."
 ```
+
+## Example: Test Bubble Tea App
+
+Bubble Tea apps (Go) require TTY compatibility flags:
+
+```
+1. spawn_tui command="./my-bubbletea-app" cols=80 rows=24 use_script=true answer_queries=true
+2. [wait 500ms for app to initialize]
+3. get_screenshot session_id="..." format="png"
+4. send_input session_id="..." key="down"
+5. get_screen session_id="..." format="text"
+6. send_input session_id="..." key="q"
+7. close_session session_id="..."
+```
+
+**Why these flags?** Bubble Tea queries terminal capabilities (cursor position, colors) before rendering. Without responses, the app hangs waiting. `use_script` provides `/dev/tty` access, and `answer_queries` auto-responds to ANSI queries.

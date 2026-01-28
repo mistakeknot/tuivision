@@ -113,11 +113,19 @@ Add to MCP configuration:
   "cols": 80,
   "rows": 24,
   "env": { "TERM": "xterm-256color" },
-  "cwd": "/home/user"
+  "cwd": "/home/user",
+  "use_script": false,
+  "answer_queries": false
 }
 ```
 
 Returns: `{ session_id, pid, cols, rows }`
+
+**TTY Compatibility** (for Bubble Tea, Charm, and similar frameworks):
+- `use_script`: Wraps command in `script` for `/dev/tty` access
+- `answer_queries`: Auto-responds to ANSI terminal queries (ESC[6n, ESC]11;?, etc.)
+
+For Bubble Tea apps, set both to `true`.
 
 ### send_input
 
@@ -194,6 +202,7 @@ sessionManager.dispose();  // Cleanup all sessions
 1. **node-canvas fonts**: May need system fonts installed for best rendering
 2. **PTY on Windows**: node-pty has different behavior on Windows
 3. **Large screens**: Very large terminal sizes may impact performance
+4. **Bubble Tea apps**: Require `use_script: true` and `answer_queries: true` to render properly (they query terminal capabilities before rendering)
 
 ## Dependencies
 
