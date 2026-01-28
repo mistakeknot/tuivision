@@ -31,22 +31,23 @@ export function getScreen(
     throw new Error(`Session not found: ${input.session_id}`);
   }
 
-  const state = session.renderer.getScreenState();
-
   switch (input.format) {
     case "text":
-      return state.lines.map((l) => l.text).join("\n");
+      return session.renderer.getScreenText();
 
     case "compact":
-      return {
-        width: state.width,
-        height: state.height,
-        cursor: state.cursor,
-        text: state.lines.map((l) => l.text).join("\n"),
-      };
+      {
+        const state = session.renderer.getScreenState();
+        return {
+          width: state.width,
+          height: state.height,
+          cursor: state.cursor,
+          text: session.renderer.getScreenText(),
+        };
+      }
 
     case "full":
     default:
-      return state;
+      return session.renderer.getScreenState();
   }
 }
