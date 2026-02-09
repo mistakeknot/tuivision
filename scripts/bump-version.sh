@@ -83,7 +83,7 @@ update_file \
     "\"version\": \"$VERSION\"" \
     "package.json"
 
-MARKETPLACE_CURRENT=$(grep -A5 '"tuivision"' "$MARKETPLACE_ROOT/.claude-plugin/marketplace.json" | grep '"version"' | sed 's/.*"\([0-9][^"]*\)".*/\1/')
+MARKETPLACE_CURRENT=$(grep -A10 '"tuivision"' "$MARKETPLACE_ROOT/.claude-plugin/marketplace.json" | grep '"version"' | sed 's/.*"\([0-9][^"]*\)".*/\1/')
 update_file \
     "$MARKETPLACE_ROOT/.claude-plugin/marketplace.json" \
     "\"version\": \"$MARKETPLACE_CURRENT\"" \
