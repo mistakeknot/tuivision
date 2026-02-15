@@ -1,4 +1,4 @@
-# Tuivision
+# tuivision
 
 > See `AGENTS.md` for full development guide.
 

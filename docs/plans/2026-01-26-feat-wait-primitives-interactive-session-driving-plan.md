@@ -13,7 +13,7 @@ Add two synchronization MCP tools (`wait_for_text` and `wait_for_screen_change`)
 
 ## Problem Statement / Motivation
 
-Tuivision can spawn, send input, and capture screens — but has no way to know when an app has finished rendering. Callers must guess delay times (the `run` command literally does `setTimeout(resolve, wait)` at `src/cli.ts:126`), leading to flaky automation.
+tuivision can spawn, send input, and capture screens — but has no way to know when an app has finished rendering. Callers must guess delay times (the `run` command literally does `setTimeout(resolve, wait)` at `src/cli.ts:126`), leading to flaky automation.
 
 ## Proposed Solution
 
@@ -204,7 +204,7 @@ pnpm build
 ## References
 
 - Brainstorm: `docs/brainstorms/2026-01-26-wait-primitives-brainstorm.md`
-- Intermute dual-channel pattern: `/root/projects/Intermute/client/websocket.go:177-181`
+- intermute dual-channel pattern: `/root/projects/intermute/client/websocket.go:177-181`
 - Existing tool pattern: `src/tools/screen.ts`
 - Session spawn: `src/session-manager.ts:51-143`
 

@@ -1,4 +1,4 @@
-# Tuivision
+# tuivision
 
 MCP server for TUI automation and visual testing - "Playwright for TUIs".
 
@@ -174,7 +174,7 @@ Close a session and clean up resources.
 │                   MCP Protocol                           │
 │                        ▼                                 │
 │              ┌─────────────────┐                        │
-│              │    Tuivision    │                        │
+│              │    tuivision    │                        │
 │              └────────┬────────┘                        │
 │                       │                                  │
 │         ┌─────────────┼─────────────┐                   │
@@ -218,7 +218,7 @@ brew install pkg-config cairo pango libpng jpeg giflib librsvg
 
 ## CLI Usage
 
-Tuivision also includes a CLI for bash-friendly automation:
+tuivision also includes a CLI for bash-friendly automation:
 
 ```bash
 # Single-shot mode (spawn, interact, capture in one command)

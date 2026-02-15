@@ -1,4 +1,4 @@
-# Tuivision Development Guide
+# tuivision Development Guide
 
 ## Quick Reference
 
@@ -13,7 +13,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                       Tuivision                          │
+│                       tuivision                          │
 ├─────────────────────────────────────────────────────────┤
 │  MCP Tools:                                              │
 │  - spawn_tui    → Start a TUI in virtual terminal       │
@@ -97,7 +97,7 @@ Add to MCP configuration:
   "mcpServers": {
     "tuivision": {
       "command": "node",
-      "args": ["/root/projects/tuivision/dist/index.js"]
+      "args": ["/root/projects/Interverse/plugins/tuivision/dist/index.js"]
     }
   }
 }

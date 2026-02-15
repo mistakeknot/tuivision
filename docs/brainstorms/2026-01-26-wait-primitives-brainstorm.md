@@ -29,13 +29,13 @@ For `wait_for_screen_change`, the `stable_ms` parameter needs debounce logic. Tw
 - **Simple post-change poll:** Detect change, wait `stable_ms`, compare again. Can miss rapid bursts.
 - **Event-based debounce:** Reset a timer on each PTY data event. Resolve only when no new data arrives for `stable_ms`.
 
-**Decision: Event-based debounce.** Inspired by Intermute's exponential backoff pattern in `client/websocket.go` — wait for quiescence, not a fixed delay. More accurate for apps that emit output in bursts.
+**Decision: Event-based debounce.** Inspired by intermute's exponential backoff pattern in `client/websocket.go` — wait for quiescence, not a fixed delay. More accurate for apps that emit output in bursts.
 
 ### Fail-fast on process exit
 
 If the PTY process exits while a wait is active, should we wait for timeout or fail immediately?
 
-**Decision: Fail fast.** Inspired by Intermute's dual-channel select pattern (`c.done` + `ctx.Done()`) in `client/websocket.go:177-181`. Waiting on a dead process is always wrong. Add `exitCode` and `onExit` to Session, wire up `ptyProcess.onExit()`, and reject wait promises immediately.
+**Decision: Fail fast.** Inspired by intermute's dual-channel select pattern (`c.done` + `ctx.Done()`) in `client/websocket.go:177-181`. Waiting on a dead process is always wrong. Add `exitCode` and `onExit` to Session, wire up `ptyProcess.onExit()`, and reject wait promises immediately.
 
 ## Key Decisions
 

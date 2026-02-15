@@ -1,5 +1,5 @@
 ---
-module: Tuivision
+module: tuivision
 date: 2026-01-26
 problem_type: ui_bug
 component: terminal_renderer

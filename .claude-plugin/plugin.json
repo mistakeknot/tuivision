@@ -1,6 +1,6 @@
 {
   "name": "tuivision",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TUI automation and visual testing - Playwright for terminal applications. Spawn, interact with, and screenshot TUI apps.",
   "author": {
     "name": "MK",
@@ -8,5 +8,13 @@
   },
   "repository": "https://github.com/mistakeknot/tuivision",
   "license": "MIT",
-  "keywords": ["tui", "terminal", "automation", "testing", "screenshot", "pty", "xterm"]
+  "keywords": [
+    "tui",
+    "terminal",
+    "automation",
+    "testing",
+    "screenshot",
+    "pty",
+    "xterm"
+  ]
 }

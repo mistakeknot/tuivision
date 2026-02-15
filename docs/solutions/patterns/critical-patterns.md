@@ -1,4 +1,4 @@
-# Tuivision Critical Patterns
+# tuivision Critical Patterns
 
 Required reading for anyone working on terminal rendering, color extraction, or xterm.js integration.
 
