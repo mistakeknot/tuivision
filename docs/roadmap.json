@@ -1,0 +1,15 @@
+{
+  "module_summary": "Tuivision automates TUI and terminal UI testing through scriptable sessions and screenshot workflows.",
+  "roadmap": {
+    "now": [
+      {"id": "ITUV-N1", "title": "Stabilize deterministic replay for complex interactive terminal sessions.", "priority": "P1"}
+    ],
+    "next": [
+      {"id": "ITUV-N2", "title": "Improve diff quality for flaky rendering and animation-heavy outputs.", "priority": "P2"},
+      {"id": "ITUV-N3", "title": "Expose richer result contracts for Clavain QA and acceptance gates.", "priority": "P2"},
+      {"id": "ITUV-L1", "title": "Add cross-device runner support for varied terminal backends.", "priority": "P2"}
+    ],
+    "later": [
+    ]
+  }
+}
