@@ -1,6 +1,6 @@
 {
   "name": "tuivision",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "TUI automation and visual testing - Playwright for terminal applications. Spawn, interact with, and screenshot TUI apps.",
   "author": {
     "name": "MK",
@@ -16,5 +16,8 @@
     "screenshot",
     "pty",
     "xterm"
+  ],
+  "skills": [
+    "./skills/tui-test"
   ]
 }
