@@ -1,8 +1,8 @@
 # tuivision
 
-TUI automation and visual testing for Claude Code — Playwright for terminal applications.
+TUI automation and visual testing for Claude Code: Playwright for terminal applications.
 
-## What This Does
+## What this does
 
 tuivision lets Claude spawn TUI apps in virtual terminals, send keystrokes, read screen state, and capture screenshots as PNG or SVG. It's an MCP server backed by node-pty (real PTY processes), xterm.js headless (ANSI parsing), and node-canvas (image rendering). The same stack that powers VS Code's terminal, minus the UI.
 
@@ -34,16 +34,16 @@ apt install build-essential python3 libcairo2-dev libpango1.0-dev libjpeg-dev li
 brew install pkg-config cairo pango libpng jpeg giflib librsvg
 ```
 
-## MCP Tools
+## MCP tools
 
-- **spawn_tui** — Start a TUI app in a virtual terminal (returns session_id)
-- **send_input** — Send keystrokes: named keys (`enter`, `tab`, `ctrl+c`, `f1`-`f12`), key sequences, or raw text
-- **get_screen** — Terminal state as text, compact (with cursor), or full (all cell data with colors)
-- **get_screenshot** — Render to base64 PNG or raw SVG (Claude can "see" the image directly)
-- **resize_session** — Change terminal dimensions
-- **list_sessions** / **close_session** — Session management
+- **spawn_tui**: Start a TUI app in a virtual terminal (returns session_id)
+- **send_input**: Send keystrokes: named keys (`enter`, `tab`, `ctrl+c`, `f1`-`f12`), key sequences, or raw text
+- **get_screen**: Terminal state as text, compact (with cursor), or full (all cell data with colors)
+- **get_screenshot**: Render to base64 PNG or raw SVG (Claude can "see" the image directly)
+- **resize_session**: Change terminal dimensions
+- **list_sessions** / **close_session**: Session management
 
-### Bubble Tea / Charm Compatibility
+### Bubble Tea / charm compatibility
 
 Some TUI frameworks need extra TTY features. For Bubble Tea apps, use both `use_script` (wraps in `script` for `/dev/tty` access) and `answer_queries` (auto-responds to ANSI terminal queries):
 
@@ -51,7 +51,7 @@ Some TUI frameworks need extra TTY features. For Bubble Tea apps, use both `use_
 { "command": "./my-bubbletea-app", "use_script": true, "answer_queries": true }
 ```
 
-## CLI Usage
+## CLI usage
 
 tuivision also includes a CLI for bash-friendly automation:
 
@@ -68,10 +68,10 @@ tuivision close <session-id>
 
 ## Limitations
 
-- Keyboard only — no mouse support
+- Keyboard only: no mouse support
 - Sessions auto-close after 30 minutes of inactivity
 - Single user per session (not designed for concurrent access)
-- Visible screen only — no scrollback capture
+- Visible screen only: no scrollback capture
 
 ## License
 
