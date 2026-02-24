@@ -10,6 +10,14 @@ Useful for TUI development (see your Textual/Bubbletea/Ratatui app as you build 
 
 ## Installation
 
+First, add the [interagency marketplace](https://github.com/mistakeknot/interagency-marketplace) (one-time setup):
+
+```bash
+/plugin marketplace add mistakeknot/interagency-marketplace
+```
+
+Then install the plugin:
+
 ```bash
 /plugin install tuivision
 ```
