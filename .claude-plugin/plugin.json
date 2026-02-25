@@ -1,6 +1,6 @@
 {
   "name": "tuivision",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "TUI automation and visual testing - Playwright for terminal applications. Spawn, interact with, and screenshot TUI apps.",
   "author": {
     "name": "MK",
@@ -19,5 +19,15 @@
   ],
   "skills": [
     "./skills/tui-test"
-  ]
+  ],
+  "mcpServers": {
+    "tuivision": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
 }

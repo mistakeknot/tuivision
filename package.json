@@ -1,6 +1,6 @@
 {
   "name": "tuivision",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "tuivision - MCP server for TUI automation and visual testing (Playwright for TUIs)",
   "packageManager": "pnpm@10.28.0",
   "type": "module",
