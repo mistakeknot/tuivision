@@ -23,9 +23,9 @@
   "mcpServers": {
     "tuivision": {
       "type": "stdio",
-      "command": "node",
+      "command": "bash",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/dist/index.js"
+        "${CLAUDE_PLUGIN_ROOT}/scripts/start.sh"
       ],
       "env": {}
     }
