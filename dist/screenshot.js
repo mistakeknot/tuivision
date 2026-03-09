@@ -1,4 +1,4 @@
-import { createCanvas, registerFont } from "canvas";
+import { loadCanvas, isPngAvailable, getCanvasBackend } from "./canvas-loader.js";
 import * as fs from "fs";
 const DEFAULT_OPTIONS = {
     fontSize: 14,
@@ -7,11 +7,14 @@ const DEFAULT_OPTIONS = {
     cursorColor: "#ffffff",
     showCursor: true,
 };
+let fontRegistered = false;
+let registeredFontFamily = "monospace";
 /**
  * Try to register a monospace font if available
  */
-function tryRegisterFont() {
-    // Common monospace font paths on Linux
+function tryRegisterFont(api) {
+    if (fontRegistered)
+        return registeredFontFamily;
     const fontPaths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
@@ -22,7 +25,9 @@ function tryRegisterFont() {
     for (const fontPath of fontPaths) {
         if (fs.existsSync(fontPath)) {
             try {
-                registerFont(fontPath, { family: "TerminalFont" });
+                api.registerFont(fontPath, { family: "TerminalFont" });
+                fontRegistered = true;
+                registeredFontFamily = "TerminalFont";
                 return "TerminalFont";
             }
             catch {
@@ -30,32 +35,46 @@ function tryRegisterFont() {
             }
         }
     }
+    fontRegistered = true;
     return "monospace";
 }
-// Try to register font once at module load
-export const DEFAULT_FONT_FAMILY = tryRegisterFont();
 export function resolveFontFamily(options) {
-    return options.fontFamily ?? DEFAULT_FONT_FAMILY;
+    return options.fontFamily ?? registeredFontFamily;
+}
+/** Re-export for callers to check before requesting PNG */
+export { isPngAvailable, getCanvasBackend };
+/** Initialize the canvas backend. Call once at startup. */
+export async function initScreenshot() {
+    const { api } = await loadCanvas();
+    if (api) {
+        tryRegisterFont(api);
+    }
 }
 /**
- * Render a terminal screen state to a PNG image buffer
+ * Render a terminal screen state to a PNG image buffer.
+ * Throws if no canvas backend is available.
  */
-export function renderToPng(state, options = {}) {
+export async function renderToPng(state, options = {}) {
+    const { api, backend } = await loadCanvas();
+    if (!api) {
+        throw new Error("PNG screenshots unavailable: no canvas backend installed. " +
+            "Install @napi-rs/canvas (recommended, prebuilt) or canvas (requires build tools). " +
+            "SVG screenshots are always available as an alternative.");
+    }
+    tryRegisterFont(api);
     const opts = { ...DEFAULT_OPTIONS, ...options };
     opts.fontFamily = resolveFontFamily(options);
     // Calculate character dimensions
-    // Using a test canvas to measure character width
-    const testCanvas = createCanvas(100, 100);
+    const testCanvas = api.createCanvas(100, 100);
     const testCtx = testCanvas.getContext("2d");
     testCtx.font = `${opts.fontSize}px ${opts.fontFamily}`;
     const charWidth = testCtx.measureText("M").width;
-    const charHeight = opts.fontSize * 1.2; // Line height
-    // Calculate canvas dimensions
+    const charHeight = opts.fontSize * 1.2;
     const width = Math.ceil(charWidth * state.width + opts.padding * 2);
     const height = Math.ceil(charHeight * state.height + opts.padding * 2);
-    const canvas = createCanvas(width, height);
+    const canvas = api.createCanvas(width, height);
     const ctx = canvas.getContext("2d");
-    // Fill background (default terminal black)
+    // Fill background
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
     // Set font
@@ -122,26 +141,24 @@ export function renderToPng(state, options = {}) {
     return canvas.toBuffer("image/png");
 }
 /**
- * Render a terminal screen state to an SVG string
+ * Render a terminal screen state to an SVG string.
+ * Always available — no native dependencies.
  */
 export function renderToSvg(state, options = {}) {
     const opts = { ...DEFAULT_OPTIONS, ...options };
     // Character dimensions for SVG
-    const charWidth = opts.fontSize * 0.6; // Approximate monospace ratio
+    const charWidth = opts.fontSize * 0.6;
     const charHeight = opts.fontSize * 1.2;
     const width = charWidth * state.width + opts.padding * 2;
     const height = charHeight * state.height + opts.padding * 2;
     const lines = [];
     lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`);
-    // Add font definition
     lines.push("<defs>");
     lines.push('<style type="text/css">');
     lines.push(`  .terminal-text { font-family: "DejaVu Sans Mono", "Consolas", monospace; font-size: ${opts.fontSize}px; }`);
     lines.push("</style>");
     lines.push("</defs>");
-    // Background
     lines.push(`<rect width="${width}" height="${height}" fill="#000000"/>`);
-    // Draw cells
     for (let y = 0; y < state.height; y++) {
         const line = state.lines[y];
         if (!line)
@@ -152,27 +169,22 @@ export function renderToSvg(state, options = {}) {
             if (!cell)
                 continue;
             const xPos = opts.padding + x * charWidth;
-            // Draw background if not default black
             if (cell.bg !== "#000000") {
                 lines.push(`<rect x="${xPos}" y="${yPos}" width="${charWidth}" height="${charHeight}" fill="${cell.bg}"/>`);
             }
-            // Draw cursor
             if (opts.showCursor &&
                 state.cursor.visible &&
                 x === state.cursor.x &&
                 y === state.cursor.y) {
                 lines.push(`<rect x="${xPos}" y="${yPos}" width="${charWidth}" height="${charHeight}" fill="${opts.cursorColor}" opacity="0.5"/>`);
             }
-            // Skip empty characters
             if (cell.char === " " || cell.char === "")
                 continue;
-            // Escape special XML characters
             const char = cell.char
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;");
-            // Build style attributes
             const styles = [];
             if (cell.bold)
                 styles.push("font-weight:bold");
@@ -181,10 +193,8 @@ export function renderToSvg(state, options = {}) {
             if (cell.dim)
                 styles.push("opacity:0.5");
             const styleAttr = styles.length > 0 ? ` style="${styles.join(";")}"` : "";
-            // Text position (baseline adjustment)
             const textY = yPos + opts.fontSize;
             lines.push(`<text class="terminal-text" x="${xPos}" y="${textY}" fill="${cell.fg}"${styleAttr}>${char}</text>`);
-            // Underline
             if (cell.underline) {
                 const underlineY = yPos + charHeight - 2;
                 lines.push(`<line x1="${xPos}" y1="${underlineY}" x2="${xPos + charWidth}" y2="${underlineY}" stroke="${cell.fg}" stroke-width="1"/>`);

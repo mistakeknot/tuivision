@@ -3,10 +3,31 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod";
 import { SessionManager } from "./session-manager.js";
+import { initScreenshot, getCanvasBackend } from "./screenshot.js";
 import { spawnTui, sendInput, getScreen, getScreenshot, waitForText, waitForScreenChange, closeSession, listSessions, resizeSession, } from "./tools/index.js";
+// Startup checks
+let ptyAvailable = true;
+try {
+    await import("node-pty");
+}
+catch (err) {
+    ptyAvailable = false;
+    console.error("FATAL: node-pty failed to load. TUI spawning will not work.\n" +
+        "Ensure build tools are installed (build-essential on Linux, Xcode CLI on macOS).\n" +
+        `Error: ${err.message}`);
+}
+// Initialize canvas backend (discovers @napi-rs/canvas or canvas)
+await initScreenshot();
+const canvasBackend = getCanvasBackend();
+if (canvasBackend === "none") {
+    console.error("Note: No canvas backend — PNG screenshots disabled, SVG available.");
+}
+else {
+    console.error(`Screenshot backend: ${canvasBackend}`);
+}
 const server = new McpServer({
     name: "tuivision",
-    version: "0.1.0",
+    version: "0.2.0",
 });
 const sessionManager = new SessionManager();
 // Register spawn_tui tool
@@ -130,16 +151,21 @@ server.registerTool("get_screenshot", {
     },
 }, async (input) => {
     try {
-        const result = getScreenshot(sessionManager, {
+        const result = await getScreenshot(sessionManager, {
             session_id: input.session_id,
             format: input.format ?? "png",
             font_size: input.font_size ?? 14,
             show_cursor: input.show_cursor ?? true,
         });
+        // Include degradation note if present
+        const noteContent = result.note
+            ? [{ type: "text", text: result.note }]
+            : [];
         // Return image content for MCP
         if (result.format === "png") {
             return {
                 content: [
+                    ...noteContent,
                     {
                         type: "image",
                         data: result.data,
@@ -150,7 +176,7 @@ server.registerTool("get_screenshot", {
         }
         // SVG as text
         return {
-            content: [{ type: "text", text: result.data }],
+            content: [...noteContent, { type: "text", text: result.data }],
         };
     }
     catch (err) {

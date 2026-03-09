@@ -19,7 +19,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { createServer, connect } from "net";
 import { SessionManager } from "./session-manager.js";
-import { renderToPng, renderToSvg } from "./screenshot.js";
+import { renderToPng, renderToSvg, isPngAvailable, initScreenshot } from "./screenshot.js";
 const SOCKET_PATH = join(tmpdir(), "tuivision.sock");
 function output(data) {
     console.log(JSON.stringify(data, null, 2));
@@ -134,9 +134,13 @@ async function run(args) {
     // Screenshot if requested
     if (flags.screenshot) {
         const screenshotPath = flags.screenshot;
-        const format = screenshotPath.endsWith(".svg") ? "svg" : "png";
+        let format = screenshotPath.endsWith(".svg") ? "svg" : "png";
+        if (format === "png" && !isPngAvailable()) {
+            console.error("Warning: PNG unavailable (no canvas backend). Saving as SVG instead.");
+            format = "svg";
+        }
         if (format === "png") {
-            writeFileSync(screenshotPath, renderToPng(state));
+            writeFileSync(screenshotPath, await renderToPng(state));
         }
         else {
             writeFileSync(screenshotPath, renderToSvg(state));
@@ -153,7 +157,7 @@ async function run(args) {
 }
 // ============== Daemon mode ==============
 let daemonSessionManager = null;
-function handleDaemonCommand(cmd) {
+async function handleDaemonCommand(cmd) {
     if (!daemonSessionManager) {
         daemonSessionManager = new SessionManager();
     }
@@ -220,13 +224,17 @@ function handleDaemonCommand(cmd) {
             }
             const state = session.renderer.getScreenState();
             const path = outputPath || `/tmp/tuivision-${session_id}.${format}`;
-            if (format === "png") {
-                writeFileSync(path, renderToPng(state));
+            let actualFormat = format;
+            if (format === "png" && !isPngAvailable()) {
+                actualFormat = "svg";
+            }
+            if (actualFormat === "png") {
+                writeFileSync(path, await renderToPng(state));
             }
             else {
                 writeFileSync(path, renderToSvg(state));
             }
-            return { success: true, path, format };
+            return { success: true, path, format: actualFormat };
         }
         case "list": {
             return { sessions: daemonSessionManager.listSessions() };
@@ -258,7 +266,7 @@ async function startDaemon() {
     }
     const server = createServer((socket) => {
         let buffer = "";
-        socket.on("data", (data) => {
+        socket.on("data", async (data) => {
             buffer += data.toString();
             // Process complete messages (newline-delimited JSON)
             const lines = buffer.split("\n");
@@ -268,7 +276,7 @@ async function startDaemon() {
                     continue;
                 try {
                     const cmd = JSON.parse(line);
-                    const result = handleDaemonCommand(cmd);
+                    const result = await handleDaemonCommand(cmd);
                     if (cmd.action === "shutdown") {
                         socket.write(JSON.stringify({ success: true }) + "\n");
                         socket.end();
@@ -488,6 +496,8 @@ Special Keys:
 `);
 }
 async function main() {
+    // Initialize canvas backend (non-blocking, discovers available backends)
+    await initScreenshot();
     const args = process.argv.slice(2);
     const command = args[0];
     const restArgs = args.slice(1);

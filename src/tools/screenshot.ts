@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SessionManager } from "../session-manager.js";
-import { renderToPng, renderToSvg } from "../screenshot.js";
+import { renderToPng, renderToSvg, isPngAvailable } from "../screenshot.js";
 
 export const getScreenshotSchema = z.object({
   session_id: z.string().describe("Session ID from spawn_tui"),
@@ -29,12 +29,13 @@ export interface ScreenshotResult {
   data: string; // base64 for PNG, raw SVG for SVG
   width: number;
   height: number;
+  note?: string; // present when format was auto-degraded
 }
 
-export function getScreenshot(
+export async function getScreenshot(
   sessionManager: SessionManager,
   input: GetScreenshotInput
-): ScreenshotResult {
+): Promise<ScreenshotResult> {
   const session = sessionManager.getSession(input.session_id);
   if (!session) {
     throw new Error(`Session not found: ${input.session_id}`);
@@ -46,7 +47,15 @@ export function getScreenshot(
     showCursor: input.show_cursor,
   };
 
-  if (input.format === "svg") {
+  // Auto-degrade PNG to SVG if canvas is unavailable
+  let format = input.format;
+  let note: string | undefined;
+  if (format === "png" && !isPngAvailable()) {
+    format = "svg";
+    note = "PNG unavailable (no canvas backend). Returning SVG instead. Install @napi-rs/canvas for PNG support.";
+  }
+
+  if (format === "svg") {
     const svg = renderToSvg(state, options);
     return {
       format: "svg",
@@ -54,10 +63,11 @@ export function getScreenshot(
       data: svg,
       width: state.width,
       height: state.height,
+      ...(note ? { note } : {}),
     };
   }
 
-  const png = renderToPng(state, options);
+  const png = await renderToPng(state, options);
   return {
     format: "png",
     mime_type: "image/png",

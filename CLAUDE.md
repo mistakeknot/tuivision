@@ -27,6 +27,6 @@ node dist/index.js
 
 - Uses xterm.js headless for ANSI parsing (battle-tested, same as VS Code terminal)
 - node-pty for cross-platform PTY management
-- node-canvas for PNG rendering (requires system deps)
+- Canvas for PNG rendering: tries @napi-rs/canvas (prebuilt) → canvas (compiled) → SVG-only fallback. Both canvas packages are optionalDependencies.
 - Sessions auto-cleanup after 30 minutes
 - MCP SDK v1.0.0 with StdioServerTransport

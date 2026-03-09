@@ -23,6 +23,7 @@ export interface ScreenshotResult {
     data: string;
     width: number;
     height: number;
+    note?: string;
 }
-export declare function getScreenshot(sessionManager: SessionManager, input: GetScreenshotInput): ScreenshotResult;
+export declare function getScreenshot(sessionManager: SessionManager, input: GetScreenshotInput): Promise<ScreenshotResult>;
 //# sourceMappingURL=screenshot.d.ts.map
