@@ -22,4 +22,10 @@ export declare function renderToPng(state: ScreenState, options?: ScreenshotOpti
  * Always available — no native dependencies.
  */
 export declare function renderToSvg(state: ScreenState, options?: ScreenshotOptions): string;
+/**
+ * Render a terminal screen state to an SVG string with span-merging.
+ * Groups adjacent same-styled cells into single <text> elements.
+ * Does NOT merge across line boundaries or whitespace gaps.
+ */
+export declare function renderToSvgMerged(state: ScreenState, options?: ScreenshotOptions): string;
 //# sourceMappingURL=screenshot.d.ts.map

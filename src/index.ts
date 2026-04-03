@@ -35,8 +35,8 @@ try {
   ptyAvailable = false;
   console.error(
     "FATAL: node-pty failed to load. TUI spawning will not work.\n" +
-    "Ensure build tools are installed (build-essential on Linux, Xcode CLI on macOS).\n" +
-    `Error: ${(err as Error).message}`
+      "Ensure build tools are installed (build-essential on Linux, Xcode CLI on macOS).\n" +
+      `Error: ${(err as Error).message}`,
   );
 }
 
@@ -44,7 +44,9 @@ try {
 await initScreenshot();
 const canvasBackend = getCanvasBackend();
 if (canvasBackend === "none") {
-  console.error("Note: No canvas backend — PNG screenshots disabled, SVG available.");
+  console.error(
+    "Note: No canvas backend — PNG screenshots disabled, SVG available.",
+  );
 } else {
   console.error(`Screenshot backend: ${canvasBackend}`);
 }
@@ -64,13 +66,30 @@ server.registerTool(
     description:
       "Start a TUI application in a virtual terminal. Returns a session_id for subsequent operations.",
     inputSchema: {
-      command: z.string().describe("Command to run (e.g., 'htop', 'python my_app.py')"),
-      args: z.array(z.string()).optional().describe("Command arguments (recommended for spaces/quotes)"),
-      cols: z.number().optional().describe("Terminal width in columns (default: 80)"),
-      rows: z.number().optional().describe("Terminal height in rows (default: 24)"),
-      env: z.record(z.string()).optional().describe("Additional environment variables"),
+      command: z
+        .string()
+        .describe("Command to run (e.g., 'htop', 'python my_app.py')"),
+      args: z
+        .array(z.string())
+        .optional()
+        .describe("Command arguments (recommended for spaces/quotes)"),
+      cols: z
+        .number()
+        .optional()
+        .describe("Terminal width in columns (default: 80)"),
+      rows: z
+        .number()
+        .optional()
+        .describe("Terminal height in rows (default: 24)"),
+      env: z
+        .record(z.string())
+        .optional()
+        .describe("Additional environment variables"),
       cwd: z.string().optional().describe("Working directory for the command"),
-      use_script: z.boolean().optional().describe("Wrap in script for better TTY compat"),
+      use_script: z
+        .boolean()
+        .optional()
+        .describe("Wrap in script for better TTY compat"),
       answer_queries: z
         .boolean()
         .optional()
@@ -98,7 +117,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register send_input tool
@@ -115,7 +134,7 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          "Special key: enter, tab, escape, backspace, up, down, left, right, ctrl+c, ctrl+d, f1-f12, etc."
+          "Special key: enter, tab, escape, backspace, up, down, left, right, ctrl+c, ctrl+d, f1-f12, etc.",
         ),
       keys: z
         .array(z.string())
@@ -140,7 +159,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register get_screen tool
@@ -149,29 +168,45 @@ server.registerTool(
   {
     title: "Get Screen",
     description:
-      "Get the current terminal state as structured data. Use 'text' format for quick checks, 'full' for detailed cell info.",
+      "Get terminal state. Use 'annotated' for efficient color-aware output (recommended), 'text' for plain text, 'compact' for text + cursor, 'full' for raw cell data.",
     inputSchema: {
       session_id: z.string().describe("Session ID from spawn_tui"),
       format: z
-        .enum(["full", "text", "compact"])
+        .enum(["full", "text", "compact", "annotated"])
         .optional()
-        .describe("Output format: full (all cell data), text (just text), compact (text + cursor)"),
+        .describe(
+          "Output format: annotated (color markers, recommended), text (plain), compact (text + cursor), full (all cell data)",
+        ),
+      include_roles: z
+        .boolean()
+        .optional()
+        .describe(
+          "Include semantic role annotations in annotated format (forward-compatible stub, not yet active)",
+        ),
     },
   },
   async (input) => {
     try {
       const result = getScreen(sessionManager, {
         session_id: input.session_id as string,
-        format: (input.format as "full" | "text" | "compact") ?? "full",
+        format:
+          (input.format as "full" | "text" | "compact" | "annotated") ??
+          "compact",
+        include_roles: (input.include_roles as boolean) ?? false,
       });
 
-      // For text format, return as plain text
-      if (typeof result === "string") {
+      const noteContent = result.note ? `\n\n${result.note}` : "";
+
+      // String formats (text, annotated) — return as plain text for token efficiency
+      if (result.format === "text" || result.format === "annotated") {
         return {
-          content: [{ type: "text", text: result }],
+          content: [
+            { type: "text", text: (result.content as string) + noteContent },
+          ],
         };
       }
 
+      // Structured formats (full, compact) — JSON serialize the envelope
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -181,7 +216,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register get_screenshot tool
@@ -193,9 +228,24 @@ server.registerTool(
       "Render the terminal to an image. Returns base64-encoded PNG or raw SVG. Use this for visual inspection of TUI layout.",
     inputSchema: {
       session_id: z.string().describe("Session ID from spawn_tui"),
-      format: z.enum(["png", "svg"]).optional().describe("Image format (default: png)"),
-      font_size: z.number().optional().describe("Font size in pixels (default: 14)"),
-      show_cursor: z.boolean().optional().describe("Whether to show cursor (default: true)"),
+      format: z
+        .enum(["png", "svg"])
+        .optional()
+        .describe("Image format (default: png)"),
+      font_size: z
+        .number()
+        .optional()
+        .describe("Font size in pixels (default: 14)"),
+      show_cursor: z
+        .boolean()
+        .optional()
+        .describe("Whether to show cursor (default: true)"),
+      svg_mode: z
+        .enum(["per_cell", "merged"])
+        .optional()
+        .describe(
+          "SVG rendering: 'per_cell' (default) or 'merged' (optimized, groups same-styled spans)",
+        ),
     },
   },
   async (input) => {
@@ -205,6 +255,7 @@ server.registerTool(
         format: (input.format as "png" | "svg") ?? "png",
         font_size: (input.font_size as number) ?? 14,
         show_cursor: (input.show_cursor as boolean) ?? true,
+        svg_mode: (input.svg_mode as "per_cell" | "merged") ?? "per_cell",
       });
 
       // Include degradation note if present
@@ -236,7 +287,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register wait_for_text tool
@@ -247,9 +298,17 @@ server.registerTool(
     description: "Wait until a regex pattern matches the current screen text.",
     inputSchema: {
       session_id: z.string().describe("Session ID from spawn_tui"),
-      pattern: z.string().describe("Regex pattern to match against full screen text"),
-      flags: z.string().optional().describe("Optional regex flags (e.g. 'i', 'm')"),
-      timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 10000)"),
+      pattern: z
+        .string()
+        .describe("Regex pattern to match against full screen text"),
+      flags: z
+        .string()
+        .optional()
+        .describe("Optional regex flags (e.g. 'i', 'm')"),
+      timeout_ms: z
+        .number()
+        .optional()
+        .describe("Timeout in milliseconds (default: 10000)"),
     },
   },
   async (input) => {
@@ -269,7 +328,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register wait_for_screen_change tool
@@ -280,11 +339,16 @@ server.registerTool(
     description: "Wait until the screen stops changing (debounced).",
     inputSchema: {
       session_id: z.string().describe("Session ID from spawn_tui"),
-      timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 5000)"),
+      timeout_ms: z
+        .number()
+        .optional()
+        .describe("Timeout in milliseconds (default: 5000)"),
       stable_ms: z
         .number()
         .optional()
-        .describe("Debounce duration with no visible text changes (default: 300)"),
+        .describe(
+          "Debounce duration with no visible text changes (default: 300)",
+        ),
     },
   },
   async (input) => {
@@ -303,7 +367,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register close_session tool
@@ -330,7 +394,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register list_sessions tool
@@ -353,7 +417,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Register resize_session tool
@@ -384,7 +448,7 @@ server.registerTool(
         isError: true,
       };
     }
-  }
+  },
 );
 
 // Handle graceful shutdown

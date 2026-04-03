@@ -2,6 +2,10 @@ import xtermHeadless from "@xterm/headless";
 const { Terminal } = xtermHeadless;
 
 type TerminalType = InstanceType<typeof Terminal>;
+type IBufferLine = NonNullable<
+  ReturnType<TerminalType["buffer"]["active"]["getLine"]>
+>;
+type IBufferCell = ReturnType<IBufferLine["getCell"]>;
 
 export interface CellData {
   char: string;
@@ -29,6 +33,46 @@ export interface ScreenState {
   };
   lines: LineData[];
 }
+
+// Single-char color codes for annotated format (palette index → code)
+const COLOR_CODES: Record<number, string> = {
+  0: "k",
+  1: "r",
+  2: "g",
+  3: "y",
+  4: "b",
+  5: "m",
+  6: "c",
+  7: "w",
+  8: "K",
+  9: "R",
+  10: "G",
+  11: "Y",
+  12: "B",
+  13: "M",
+  14: "C",
+  15: "W",
+};
+
+// Semantic color groups for agent consumption
+export const SEMANTIC_COLOR_GROUPS: Record<string, string> = {
+  r: "error",
+  R: "error",
+  g: "success",
+  G: "success",
+  y: "warning",
+  Y: "warning",
+  b: "info",
+  B: "info",
+  c: "info",
+  C: "info",
+  m: "accent",
+  M: "accent",
+  w: "neutral",
+  W: "neutral",
+  k: "neutral",
+  K: "neutral",
+};
 
 // Default xterm colors (16-color palette)
 const DEFAULT_COLORS = [
@@ -85,81 +129,166 @@ export class TerminalRenderer {
   }
 
   /**
-   * Extract color from xterm.js cell raw fg/bg value
-   * Format is MMRRGGBB where:
-   * - MM (top byte) contains color mode in bits 0-1 and attribute flags in higher bits
-   * - Color modes: 0=default, 1=16-color, 2=256-color, 3=RGB
+   * Get hex color from a cell using public IBufferCell API.
+   * Uses boolean detection methods (isFgDefault/isFgPalette/isFgRGB)
+   * instead of raw bitmask values from getFgColorMode().
    */
-  private extractColor(rawValue: number, defaultColor: string): string {
-    // Extract mode byte and get color mode from bits 0-1
-    const modeByte = (rawValue >> 24) & 0xff;
-    const colorMode = modeByte & 0x03;
+  private getCellColor(
+    cell: NonNullable<IBufferCell>,
+    isBackground: boolean,
+    defaultColor: string,
+  ): string {
+    const isDefault = isBackground ? cell.isBgDefault() : cell.isFgDefault();
+    if (isDefault) return defaultColor;
 
-    // Mode 0: default color
-    if (colorMode === 0) {
-      return defaultColor;
-    }
+    const isPalette = isBackground ? cell.isBgPalette() : cell.isFgPalette();
+    const isRGB = isBackground ? cell.isBgRGB() : cell.isFgRGB();
+    const colorValue = isBackground ? cell.getBgColor() : cell.getFgColor();
 
-    // Mode 3: RGB true color (24-bit)
-    if (colorMode === 3) {
-      const r = (rawValue >> 16) & 0xff;
-      const g = (rawValue >> 8) & 0xff;
-      const b = rawValue & 0xff;
+    if (isRGB) {
+      const r = (colorValue >> 16) & 0xff;
+      const g = (colorValue >> 8) & 0xff;
+      const b = colorValue & 0xff;
       return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
     }
 
-    // Mode 1: 16-color palette, Mode 2: 256-color palette
-    // The color index is in the lower byte(s)
-    const colorIndex = rawValue & 0xff;
-
-    // Handle 16-color palette (0-15)
-    if (colorIndex < 16) {
-      return DEFAULT_COLORS[colorIndex];
+    if (isPalette) {
+      const colorIndex = colorValue & 0xff;
+      if (colorIndex < 16) {
+        return DEFAULT_COLORS[colorIndex];
+      }
+      if (colorIndex < 232) {
+        const idx = colorIndex - 16;
+        const r = Math.floor(idx / 36);
+        const g = Math.floor((idx % 36) / 6);
+        const b = idx % 6;
+        const toHex = (v: number) => (v === 0 ? 0 : 55 + v * 40);
+        return `#${toHex(r).toString(16).padStart(2, "0")}${toHex(g).toString(16).padStart(2, "0")}${toHex(b).toString(16).padStart(2, "0")}`;
+      }
+      const gray = (colorIndex - 232) * 10 + 8;
+      return `#${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}`;
     }
 
-    // Handle 256-color palette (16-231: 6x6x6 cube, 232-255: grayscale)
-    if (colorIndex < 232) {
-      // 6x6x6 color cube
-      const idx = colorIndex - 16;
-      const r = Math.floor(idx / 36);
-      const g = Math.floor((idx % 36) / 6);
-      const b = idx % 6;
-      const toHex = (v: number) => (v === 0 ? 0 : 55 + v * 40);
-      return `#${toHex(r).toString(16).padStart(2, "0")}${toHex(g).toString(16).padStart(2, "0")}${toHex(b).toString(16).padStart(2, "0")}`;
-    }
-
-    // Grayscale (232-255)
-    const gray = (colorIndex - 232) * 10 + 8;
-    return `#${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}`;
+    return defaultColor;
   }
 
   /**
-   * Convert a color number to hex string (legacy method for compatibility)
+   * Convert RGB to CIELAB color space for perceptual distance calculations.
    */
-  private colorToHex(color: number, isDefault: boolean, defaultColor: string): string {
-    if (isDefault) {
-      return defaultColor;
-    }
+  private static rgbToLab(
+    r: number,
+    g: number,
+    b: number,
+  ): [number, number, number] {
+    // sRGB → linear
+    let rl = r / 255,
+      gl = g / 255,
+      bl = b / 255;
+    rl = rl > 0.04045 ? Math.pow((rl + 0.055) / 1.055, 2.4) : rl / 12.92;
+    gl = gl > 0.04045 ? Math.pow((gl + 0.055) / 1.055, 2.4) : gl / 12.92;
+    bl = bl > 0.04045 ? Math.pow((bl + 0.055) / 1.055, 2.4) : bl / 12.92;
+    // linear RGB → XYZ (D65)
+    let x = (rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375) / 0.95047;
+    let y = rl * 0.2126729 + gl * 0.7151522 + bl * 0.072175;
+    let z = (rl * 0.0193339 + gl * 0.119192 + bl * 0.9503041) / 1.08883;
+    // XYZ → CIELAB
+    const f = (t: number) =>
+      t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    const L = 116 * f(y) - 16;
+    const a = 500 * (f(x) - f(y));
+    const bL = 200 * (f(y) - f(z));
+    return [L, a, bL];
+  }
 
-    // Handle 16-color palette (0-15)
-    if (color < 16) {
-      return DEFAULT_COLORS[color];
-    }
+  // Precomputed CIELAB centroids for the 16 default colors
+  private static readonly LAB_CENTROIDS: [number, number, number][] =
+    DEFAULT_COLORS.map((hex) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return TerminalRenderer.rgbToLab(r, g, b);
+    });
 
-    // Handle 256-color palette (16-231: 6x6x6 cube, 232-255: grayscale)
-    if (color < 232) {
-      // 6x6x6 color cube
-      const idx = color - 16;
+  /**
+   * Convert 256-color palette index (16-255) to RGB.
+   */
+  private static palette256ToRgb(index: number): [number, number, number] {
+    if (index < 232) {
+      const idx = index - 16;
       const r = Math.floor(idx / 36);
       const g = Math.floor((idx % 36) / 6);
       const b = idx % 6;
-      const toHex = (v: number) => (v === 0 ? 0 : 55 + v * 40);
-      return `#${toHex(r).toString(16).padStart(2, "0")}${toHex(g).toString(16).padStart(2, "0")}${toHex(b).toString(16).padStart(2, "0")}`;
+      const toVal = (v: number) => (v === 0 ? 0 : 55 + v * 40);
+      return [toVal(r), toVal(g), toVal(b)];
     }
+    const gray = (index - 232) * 10 + 8;
+    return [gray, gray, gray];
+  }
 
-    // Grayscale (232-255)
-    const gray = (color - 232) * 10 + 8;
-    return `#${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}${gray.toString(16).padStart(2, "0")}`;
+  /**
+   * Find nearest 16-color code for an RGB value using CIELAB distance.
+   */
+  private static nearestColorCode(r: number, g: number, b: number): string {
+    const lab = TerminalRenderer.rgbToLab(r, g, b);
+    let bestIdx = 7; // default to white
+    let bestDist = Infinity;
+    for (let i = 0; i < 16; i++) {
+      const c = TerminalRenderer.LAB_CENTROIDS[i];
+      const dL = lab[0] - c[0],
+        da = lab[1] - c[1],
+        db = lab[2] - c[2];
+      const dist = dL * dL + da * da + db * db;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    return COLOR_CODES[bestIdx];
+  }
+
+  /**
+   * Quantize a cell's foreground color to a single-char color code.
+   * Uses palette index directly for indexed colors (semantic, not visual).
+   * Uses CIELAB perceptual distance for truecolor.
+   * Returns empty string for default color.
+   */
+  quantizeFgColor(cell: NonNullable<IBufferCell>): string {
+    if (cell.isFgDefault()) return "";
+    const colorValue = cell.getFgColor();
+    if (cell.isFgPalette()) {
+      const idx = colorValue & 0xff;
+      if (idx < 16) return COLOR_CODES[idx] || "w";
+      const [r, g, b] = TerminalRenderer.palette256ToRgb(idx);
+      return TerminalRenderer.nearestColorCode(r, g, b);
+    }
+    if (cell.isFgRGB()) {
+      const r = (colorValue >> 16) & 0xff;
+      const g = (colorValue >> 8) & 0xff;
+      const b = colorValue & 0xff;
+      return TerminalRenderer.nearestColorCode(r, g, b);
+    }
+    return "";
+  }
+
+  /**
+   * Quantize a cell's background color to a single-char color code.
+   */
+  quantizeBgColor(cell: NonNullable<IBufferCell>): string {
+    if (cell.isBgDefault()) return "";
+    const colorValue = cell.getBgColor();
+    if (cell.isBgPalette()) {
+      const idx = colorValue & 0xff;
+      if (idx < 16) return COLOR_CODES[idx] || "k";
+      const [r, g, b] = TerminalRenderer.palette256ToRgb(idx);
+      return TerminalRenderer.nearestColorCode(r, g, b);
+    }
+    if (cell.isBgRGB()) {
+      const r = (colorValue >> 16) & 0xff;
+      const g = (colorValue >> 8) & 0xff;
+      const b = colorValue & 0xff;
+      return TerminalRenderer.nearestColorCode(r, g, b);
+    }
+    return "";
   }
 
   /**
@@ -200,14 +329,28 @@ export class TerminalRenderer {
           continue;
         }
 
+        if (cell.getWidth() === 0) {
+          // Wide character continuation cell — push empty placeholder
+          // to keep cells[] aligned with column positions for SVG rendering
+          cells.push({
+            char: "",
+            fg: "#000000",
+            bg: "#000000",
+            bold: false,
+            italic: false,
+            underline: false,
+            dim: false,
+            inverse: false,
+          });
+          continue;
+        }
+
         const char = cell.getChars() || " ";
         text += char;
 
-        // Get colors from raw fg/bg values (handles RGB true color)
-        // The cell object has fg and bg as direct properties containing encoded color values
-        const cellAny = cell as unknown as { fg: number; bg: number };
-        const fg = this.extractColor(cellAny.fg, "#ffffff");
-        const bg = this.extractColor(cellAny.bg, "#000000");
+        // Get colors using public IBufferCell API
+        const fg = this.getCellColor(cell, false, "#ffffff");
+        const bg = this.getCellColor(cell, true, "#000000");
 
         // Get attributes using xterm.js API (methods return non-zero for truthy)
         const bold = !!cell.isBold();
@@ -252,6 +395,126 @@ export class TerminalRenderer {
   getScreenText(): string {
     const state = this.getScreenState();
     return state.lines.map((l) => l.text).join("\n");
+  }
+
+  /**
+   * Get annotated text with inline color/style markers.
+   * Produces ~400-800 tokens per 80x24 screen (vs 12K for full, 250 for text).
+   * Format spec: interverse/tuivision/docs/annotated-format-spec.md
+   */
+  getAnnotatedText(options?: { includeRoles?: boolean }): string {
+    const buffer = this.terminal.buffer.active;
+    const outputLines: string[] = [];
+
+    // Structural preamble
+    const cursorVisible =
+      this.terminal.buffer.active === this.terminal.buffer.normal;
+    const cursorPart = cursorVisible
+      ? `cursor=${buffer.cursorX},${buffer.cursorY}`
+      : "cursor=hidden";
+    outputLines.push(
+      `[screen ${this._cols}x${this._rows} ${cursorPart}]`,
+    );
+
+    // First pass: compute modal foreground color for density threshold
+    const fgCounts = new Map<string, number>();
+    let totalStyledCells = 0;
+    for (let y = 0; y < this._rows; y++) {
+      const line = buffer.getLine(y);
+      if (!line) continue;
+      for (let x = 0; x < this._cols; x++) {
+        const cell = line.getCell(x);
+        if (!cell || cell.getWidth() === 0) continue;
+        const ch = cell.getChars() || " ";
+        if (ch === " ") continue;
+        const code = this.quantizeFgColor(cell);
+        if (code) {
+          fgCounts.set(code, (fgCounts.get(code) || 0) + 1);
+          totalStyledCells++;
+        }
+      }
+    }
+
+    // Find modal color and check density threshold (>60% = suppress)
+    let modalColor = "";
+    if (totalStyledCells > 0) {
+      let maxCount = 0;
+      for (const [code, count] of fgCounts) {
+        if (count > maxCount) {
+          maxCount = count;
+          modalColor = code;
+        }
+      }
+      if (maxCount / totalStyledCells <= 0.6) {
+        modalColor = ""; // Below threshold — don't suppress anything
+      }
+    }
+
+    // Second pass: generate annotated output
+    for (let y = 0; y < this._rows; y++) {
+      const line = buffer.getLine(y);
+      if (!line) {
+        outputLines.push("");
+        continue;
+      }
+
+      let lineOut = "";
+      let currentMarker = ""; // Currently open marker string (e.g., "r+")
+      let markerOpen = false;
+
+      for (let x = 0; x < this._cols; x++) {
+        const cell = line.getCell(x);
+        if (!cell || cell.getWidth() === 0) continue;
+
+        const ch = cell.getChars() || " ";
+
+        // Build marker string for this cell
+        let cellMarker = "";
+
+        // Color (use original colors, not pre-resolved inverse)
+        const fgCode = this.quantizeFgColor(cell);
+        if (fgCode && fgCode !== modalColor) {
+          cellMarker += fgCode;
+        }
+
+        // Style attributes
+        if (cell.isBold()) cellMarker += "+";
+        if (cell.isUnderline()) cellMarker += "_";
+        if (cell.isDim()) cellMarker += "~";
+        if (cell.isInverse()) cellMarker += "^";
+
+        // Check if marker changed
+        if (cellMarker !== currentMarker) {
+          // Close previous marker if open
+          if (markerOpen) {
+            lineOut += "[/]";
+            markerOpen = false;
+          }
+          // Open new marker if non-empty
+          if (cellMarker) {
+            lineOut += `[${cellMarker}]`;
+            markerOpen = true;
+          }
+          currentMarker = cellMarker;
+        }
+
+        // Escape literal `[` in terminal content
+        if (ch === "[") {
+          lineOut += "[[";
+        } else {
+          lineOut += ch;
+        }
+      }
+
+      // Close any open marker at end of line
+      if (markerOpen) {
+        lineOut += "[/]";
+      }
+
+      outputLines.push(lineOut.trimEnd());
+    }
+
+    return outputLines.join("\n");
   }
 
   dispose(): void {

@@ -5,11 +5,18 @@ import type { ScreenState } from "../terminal-renderer.js";
 export const getScreenSchema = z.object({
   session_id: z.string().describe("Session ID from spawn_tui"),
   format: z
-    .enum(["full", "text", "compact"])
+    .enum(["full", "text", "compact", "annotated"])
     .optional()
-    .default("full")
+    .default("compact")
     .describe(
-      "Output format: 'full' includes all cell data, 'text' returns just the text, 'compact' returns text with basic cursor info"
+      "Output format: 'annotated' for efficient color-aware output (recommended), 'text' for plain text, 'compact' for text + cursor, 'full' for raw cell data",
+    ),
+  include_roles: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      "Include semantic role annotations in annotated format (forward-compatible stub, not yet active)",
     ),
 });
 
@@ -22,10 +29,17 @@ export interface CompactScreenState {
   text: string;
 }
 
+export interface ScreenResponse {
+  format: "full" | "text" | "compact" | "annotated";
+  schema: number;
+  content: ScreenState | CompactScreenState | string;
+  note?: string;
+}
+
 export function getScreen(
   sessionManager: SessionManager,
-  input: GetScreenInput
-): ScreenState | CompactScreenState | string {
+  input: GetScreenInput,
+): ScreenResponse {
   const session = sessionManager.getSession(input.session_id);
   if (!session) {
     throw new Error(`Session not found: ${input.session_id}`);
@@ -33,21 +47,41 @@ export function getScreen(
 
   switch (input.format) {
     case "text":
-      return session.renderer.getScreenText();
+      return {
+        format: "text",
+        schema: 1,
+        content: session.renderer.getScreenText(),
+      };
 
-    case "compact":
-      {
-        const state = session.renderer.getScreenState();
-        return {
+    case "compact": {
+      const state = session.renderer.getScreenState();
+      return {
+        format: "compact",
+        schema: 1,
+        content: {
           width: state.width,
           height: state.height,
           cursor: state.cursor,
-          text: session.renderer.getScreenText(),
-        };
-      }
+          text: state.lines.map((l) => l.text).join("\n"),
+        },
+      };
+    }
+
+    case "annotated":
+      return {
+        format: "annotated",
+        schema: 1,
+        content: session.renderer.getAnnotatedText({
+          includeRoles: input.include_roles,
+        }),
+      };
 
     case "full":
     default:
-      return session.renderer.getScreenState();
+      return {
+        format: "full",
+        schema: 1,
+        content: session.renderer.getScreenState(),
+      };
   }
 }

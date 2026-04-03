@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { renderToPng, renderToSvg, isPngAvailable } from "../screenshot.js";
+import { renderToPng, renderToSvg, renderToSvgMerged, isPngAvailable, } from "../screenshot.js";
 export const getScreenshotSchema = z.object({
     session_id: z.string().describe("Session ID from spawn_tui"),
     format: z
@@ -7,16 +7,17 @@ export const getScreenshotSchema = z.object({
         .optional()
         .default("png")
         .describe("Image format: 'png' for bitmap, 'svg' for vector"),
-    font_size: z
-        .number()
-        .optional()
-        .default(14)
-        .describe("Font size in pixels"),
+    font_size: z.number().optional().default(14).describe("Font size in pixels"),
     show_cursor: z
         .boolean()
         .optional()
         .default(true)
         .describe("Whether to show the cursor"),
+    svg_mode: z
+        .enum(["per_cell", "merged"])
+        .optional()
+        .default("per_cell")
+        .describe("SVG rendering mode: 'per_cell' (current, one element per character) or 'merged' (optimized, groups same-styled adjacent cells into spans)"),
 });
 export async function getScreenshot(sessionManager, input) {
     const session = sessionManager.getSession(input.session_id);
@@ -33,10 +34,13 @@ export async function getScreenshot(sessionManager, input) {
     let note;
     if (format === "png" && !isPngAvailable()) {
         format = "svg";
-        note = "PNG unavailable (no canvas backend). Returning SVG instead. Install @napi-rs/canvas for PNG support.";
+        note =
+            "PNG unavailable (no canvas backend). Returning SVG instead. Install @napi-rs/canvas for PNG support.";
     }
     if (format === "svg") {
-        const svg = renderToSvg(state, options);
+        const svg = input.svg_mode === "merged"
+            ? renderToSvgMerged(state, options)
+            : renderToSvg(state, options);
         return {
             format: "svg",
             mime_type: "image/svg+xml",

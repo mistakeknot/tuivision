@@ -35,13 +35,30 @@ server.registerTool("spawn_tui", {
     title: "Spawn TUI",
     description: "Start a TUI application in a virtual terminal. Returns a session_id for subsequent operations.",
     inputSchema: {
-        command: z.string().describe("Command to run (e.g., 'htop', 'python my_app.py')"),
-        args: z.array(z.string()).optional().describe("Command arguments (recommended for spaces/quotes)"),
-        cols: z.number().optional().describe("Terminal width in columns (default: 80)"),
-        rows: z.number().optional().describe("Terminal height in rows (default: 24)"),
-        env: z.record(z.string()).optional().describe("Additional environment variables"),
+        command: z
+            .string()
+            .describe("Command to run (e.g., 'htop', 'python my_app.py')"),
+        args: z
+            .array(z.string())
+            .optional()
+            .describe("Command arguments (recommended for spaces/quotes)"),
+        cols: z
+            .number()
+            .optional()
+            .describe("Terminal width in columns (default: 80)"),
+        rows: z
+            .number()
+            .optional()
+            .describe("Terminal height in rows (default: 24)"),
+        env: z
+            .record(z.string())
+            .optional()
+            .describe("Additional environment variables"),
         cwd: z.string().optional().describe("Working directory for the command"),
-        use_script: z.boolean().optional().describe("Wrap in script for better TTY compat"),
+        use_script: z
+            .boolean()
+            .optional()
+            .describe("Wrap in script for better TTY compat"),
         answer_queries: z
             .boolean()
             .optional()
@@ -108,26 +125,36 @@ server.registerTool("send_input", {
 // Register get_screen tool
 server.registerTool("get_screen", {
     title: "Get Screen",
-    description: "Get the current terminal state as structured data. Use 'text' format for quick checks, 'full' for detailed cell info.",
+    description: "Get terminal state. Use 'annotated' for efficient color-aware output (recommended), 'text' for plain text, 'compact' for text + cursor, 'full' for raw cell data.",
     inputSchema: {
         session_id: z.string().describe("Session ID from spawn_tui"),
         format: z
-            .enum(["full", "text", "compact"])
+            .enum(["full", "text", "compact", "annotated"])
             .optional()
-            .describe("Output format: full (all cell data), text (just text), compact (text + cursor)"),
+            .describe("Output format: annotated (color markers, recommended), text (plain), compact (text + cursor), full (all cell data)"),
+        include_roles: z
+            .boolean()
+            .optional()
+            .describe("Include semantic role annotations in annotated format (forward-compatible stub, not yet active)"),
     },
 }, async (input) => {
     try {
         const result = getScreen(sessionManager, {
             session_id: input.session_id,
-            format: input.format ?? "full",
+            format: input.format ??
+                "compact",
+            include_roles: input.include_roles ?? false,
         });
-        // For text format, return as plain text
-        if (typeof result === "string") {
+        const noteContent = result.note ? `\n\n${result.note}` : "";
+        // String formats (text, annotated) — return as plain text for token efficiency
+        if (result.format === "text" || result.format === "annotated") {
             return {
-                content: [{ type: "text", text: result }],
+                content: [
+                    { type: "text", text: result.content + noteContent },
+                ],
             };
         }
+        // Structured formats (full, compact) — JSON serialize the envelope
         return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
@@ -145,9 +172,22 @@ server.registerTool("get_screenshot", {
     description: "Render the terminal to an image. Returns base64-encoded PNG or raw SVG. Use this for visual inspection of TUI layout.",
     inputSchema: {
         session_id: z.string().describe("Session ID from spawn_tui"),
-        format: z.enum(["png", "svg"]).optional().describe("Image format (default: png)"),
-        font_size: z.number().optional().describe("Font size in pixels (default: 14)"),
-        show_cursor: z.boolean().optional().describe("Whether to show cursor (default: true)"),
+        format: z
+            .enum(["png", "svg"])
+            .optional()
+            .describe("Image format (default: png)"),
+        font_size: z
+            .number()
+            .optional()
+            .describe("Font size in pixels (default: 14)"),
+        show_cursor: z
+            .boolean()
+            .optional()
+            .describe("Whether to show cursor (default: true)"),
+        svg_mode: z
+            .enum(["per_cell", "merged"])
+            .optional()
+            .describe("SVG rendering: 'per_cell' (default) or 'merged' (optimized, groups same-styled spans)"),
     },
 }, async (input) => {
     try {
@@ -156,6 +196,7 @@ server.registerTool("get_screenshot", {
             format: input.format ?? "png",
             font_size: input.font_size ?? 14,
             show_cursor: input.show_cursor ?? true,
+            svg_mode: input.svg_mode ?? "per_cell",
         });
         // Include degradation note if present
         const noteContent = result.note
@@ -192,9 +233,17 @@ server.registerTool("wait_for_text", {
     description: "Wait until a regex pattern matches the current screen text.",
     inputSchema: {
         session_id: z.string().describe("Session ID from spawn_tui"),
-        pattern: z.string().describe("Regex pattern to match against full screen text"),
-        flags: z.string().optional().describe("Optional regex flags (e.g. 'i', 'm')"),
-        timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 10000)"),
+        pattern: z
+            .string()
+            .describe("Regex pattern to match against full screen text"),
+        flags: z
+            .string()
+            .optional()
+            .describe("Optional regex flags (e.g. 'i', 'm')"),
+        timeout_ms: z
+            .number()
+            .optional()
+            .describe("Timeout in milliseconds (default: 10000)"),
     },
 }, async (input) => {
     try {
@@ -221,7 +270,10 @@ server.registerTool("wait_for_screen_change", {
     description: "Wait until the screen stops changing (debounced).",
     inputSchema: {
         session_id: z.string().describe("Session ID from spawn_tui"),
-        timeout_ms: z.number().optional().describe("Timeout in milliseconds (default: 5000)"),
+        timeout_ms: z
+            .number()
+            .optional()
+            .describe("Timeout in milliseconds (default: 5000)"),
         stable_ms: z
             .number()
             .optional()
