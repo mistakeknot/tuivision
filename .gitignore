@@ -7,3 +7,6 @@ __pycache__/
 
 # TypeScript build output
 dist/
+
+# npm fallback lockfile (start.sh uses npm install for plugin install bootstrap)
+package-lock.json

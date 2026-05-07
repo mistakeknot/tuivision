@@ -45,6 +45,7 @@ export async function loadCanvas(): Promise<CanvasLoadResult> {
 
   // Try node-canvas (requires node-gyp compilation)
   try {
+    // @ts-ignore — optional dependency, may not be installed
     const mod = await import("canvas");
     cached = {
       api: {

@@ -42,4 +42,14 @@ if [ ! -d "$PROJECT_DIR/node_modules" ]; then
   " 2>&2 || true
 fi
 
+# Build TypeScript output if missing (dist/ is gitignored — plugin tarballs ship without it)
+if [ ! -f "$PROJECT_DIR/dist/index.js" ]; then
+  echo "Building tuivision..." >&2
+  cd "$PROJECT_DIR"
+  npm run build 2>&1 >&2 || {
+    echo "ERROR: tuivision build failed — MCP server cannot start" >&2
+    exit 1
+  }
+fi
+
 exec node "$PROJECT_DIR/dist/index.js" "$@"
